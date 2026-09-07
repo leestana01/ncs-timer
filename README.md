@@ -5,7 +5,8 @@ NCS 문제를 풀면서 **문제당 몇 초(분)** 이 걸렸는지 기록하는
 
 ## 사용 흐름
 
-1. **시작** — 세트 이름과 문제 수를 정하고 시작합니다.
+1. **시작** — 세트 이름, **시작 번호**, 문제 수를 정하고 시작합니다.
+   1번부터 풀지 않아도 됩니다. 31번부터 10문제를 풀면 화면·리포트·그래프 모두 `31~40번`으로 기록됩니다.
 2. **다음 / 패스** — 문제를 풀면 `다음 문제`, 넘어가면 `패스`를 누릅니다.
    패스한 문제도 **패스를 누르기까지 걸린 시간이 그대로 기록**됩니다.
    - 단축키: `스페이스` · `Enter` · `→` = 다음, `P` · `↓` = 패스
@@ -41,8 +42,12 @@ npx http-server -p 8123 .
 ## GitHub Pages 배포
 
 `main` 브랜치에 푸시하면 `.github/workflows/deploy.yml` 이 저장소 루트를 그대로 Pages 에 올립니다.
-최초 1회만 저장소 **Settings → Pages → Build and deployment → Source** 를 **GitHub Actions** 로 설정하세요.
-(Actions 대신 *Deploy from a branch* 로 `main` / `/ (root)` 를 선택해도 동일하게 동작합니다.)
+워크플로의 `configure-pages` 단계가 `enablement: true` 라서 Pages 가 꺼져 있으면 **스스로 켭니다**.
+별도 설정 없이 푸시만 하면 `https://<사용자>.github.io/ncs-timer/` 에 배포됩니다.
+
+- 저장소 설정에서 Actions 권한이 막혀 있으면 워크플로가 실패합니다.
+  그때는 **Settings → Pages → Source** 를 *GitHub Actions* 로 한 번만 지정해 주세요.
+- 저장 키가 도메인 단위이므로, 같은 주소로 계속 접속하면 기록이 유지됩니다.
 
 ## 파일
 

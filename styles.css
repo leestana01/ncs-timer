@@ -169,6 +169,8 @@ input:focus-visible, .btn:focus-visible, .chip:focus-visible, button:focus-visib
   outline-offset: 2px;
 }
 
+.two { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
+
 .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .presets button {
   border: 1px solid var(--line);

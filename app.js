@@ -59,13 +59,14 @@
     return null;
   }
 
-  function createSet(name, count) {
+  function createSet(name, count, start) {
     var problems = [];
     for (var i = 0; i < count; i++) problems.push({ attempts: [] });
     var s = {
       id: 'set-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
       name: name,
       count: count,
+      start: start, // 세트의 첫 문제 번호 (1번부터 시작하지 않을 수 있다)
       createdAt: Date.now(),
       finishedAt: null,
       status: 'active',
@@ -78,6 +79,15 @@
     db.sets.push(s);
     save();
     return s;
+  }
+
+  // 화면에 보여줄 실제 문제 번호 (start 없이 저장된 예전 기록은 1번 시작으로 본다)
+  function qno(s, i) {
+    return (s.start || 1) + i;
+  }
+
+  function rangeText(s) {
+    return s.count > 1 ? qno(s, 0) + '~' + qno(s, s.count - 1) + '번' : qno(s, 0) + '번';
   }
 
   function running(s) {
@@ -269,27 +279,34 @@
       for (var i = 0; i < s.count; i++) if (problemState(s, i) === 'solved') doneCount++;
       html += '<div class="resume">' +
         '<div class="grow"><div style="font-weight:600">진행 중인 세트가 있습니다</div>' +
-        '<div class="muted" style="font-size:14px">' + esc(s.name) + ' · ' + doneCount + '/' + s.count +
-        ' 문제 완료 · 누적 <span class="mono">' + fmt(totalMs(s)) + '</span></div></div>' +
+        '<div class="muted" style="font-size:14px">' + esc(s.name) + ' · ' + rangeText(s) + ' · ' +
+        doneCount + '/' + s.count + ' 문제 완료 · 누적 <span class="mono">' + fmt(totalMs(s)) +
+        '</span></div></div>' +
         '<button class="btn primary" data-action="resume">이어서 풀기</button>' +
         '<button class="btn ghost" data-action="discard">삭제</button>' +
         '</div>';
     }
 
     html += '<h1>문제당 몇 초가 걸렸을까?</h1>' +
-      '<p class="sub">시작을 누르고 문제를 풀며 <b>다음</b>만 누르세요. 나머지는 알아서 기록됩니다.</p>';
+      '<p class="sub">시작을 누르고 문제를 풀며 <b>다음</b>만 누르세요. 나머지는 알아서 기록됩니다. ' +
+      '세트 중간(예: 31번)부터 시작해도 됩니다.</p>';
 
     html += '<div class="card">' +
       '<form id="start-form">' +
       '<label class="field"><span>세트 이름</span>' +
       '<input type="text" id="set-name" value="' + esc(defaultName()) + '" maxlength="60" /></label>' +
+      '<div class="two">' +
+      '<label class="field"><span>시작 번호</span>' +
+      '<input type="number" id="set-start" value="1" min="1" max="999" inputmode="numeric" /></label>' +
       '<label class="field"><span>문제 수</span>' +
       '<input type="number" id="set-count" value="20" min="1" max="200" inputmode="numeric" /></label>' +
+      '</div>' +
       '<div class="presets">' +
       [10, 15, 20, 25, 40, 50, 60].map(function (n) {
         return '<button type="button" data-preset="' + n + '">' + n + '문제</button>';
       }).join('') +
       '</div>' +
+      '<div class="hint" id="range-hint" style="margin-top:10px">1~20번으로 기록됩니다.</div>' +
       '<div style="margin-top:20px"><button class="btn primary lg wide" type="submit">시작하기</button></div>' +
       '</form></div>';
 
@@ -311,7 +328,8 @@
     return '<div class="setrow">' +
       '<div class="grow">' +
       '<div class="name">' + esc(s.name) + '</div>' +
-      '<div class="meta">' + fmtDate(s.finishedAt || s.createdAt) + ' · ' + s.count + '문제</div>' +
+      '<div class="meta">' + fmtDate(s.finishedAt || s.createdAt) + ' · ' + rangeText(s) +
+      ' (' + s.count + '문제)</div>' +
       '</div>' +
       '<div class="val">' + fmt(t) + '<small>문제당 ' + fmt(solved ? t / solved : 0) + '</small></div>' +
       '<button class="linkish" data-action="open-report" data-id="' + s.id + '">리포트</button>' +
@@ -330,14 +348,14 @@
 
     html += '<div class="run-head">' +
       '<div class="set-name">' + esc(s.name) + '</div>' +
-      '<div class="pos">' + (open ? (idx + 1) + ' / ' + s.count + '번' : '검토 단계') + '</div>' +
+      '<div class="pos">' + (open ? rangeText(s) + ' 중 ' + (idx + 1) + '번째' : rangeText(s) + ' · 검토 단계') + '</div>' +
       '</div>';
 
     html += '<div class="stage">';
     if (open) {
       var prev = attemptsSum(s.problems[idx]);
       html += '<div class="qlabel">지금 푸는 문제</div>' +
-        '<div class="qnum">' + (idx + 1) + '번</div>' +
+        '<div class="qnum">' + qno(s, idx) + '번</div>' +
         '<div class="bigtime" id="big-time">' + fmt(liveMs(s)) + '</div>' +
         '<div class="metaline">' +
         (prev > 0 ? '이 문제 누적 <b id="q-total">' + fmt(prev + liveMs(s)) + '</b> · ' : '') +
@@ -378,7 +396,7 @@
       var ms = problemMs(s, i);
       html += '<button class="chip ' + st + '" data-action="goto" data-index="' + i + '"' +
         (st === 'current' ? ' disabled' : '') + '>' +
-        '<div class="n">' + (i + 1) + '</div>' +
+        '<div class="n">' + qno(s, i) + '</div>' +
         '<div class="t" data-time="' + i + '">' + (ms ? fmt(ms) : '–') + '</div>' +
         '</button>';
     }
@@ -395,7 +413,7 @@
     for (var i = 0; i < s.count; i++) {
       var ms = problemMs(s, i);
       values.push(ms);
-      labels.push(String(i + 1));
+      labels.push(String(qno(s, i)));
       if (s.problems[i].attempts.length) {
         touched++;
         if (maxI < 0 || ms > values[maxI]) maxI = i;
@@ -408,15 +426,15 @@
     var html = '<div class="row" style="margin:16px 0 4px">' +
       '<button class="linkish" data-nav="sets">← 기록</button></div>';
     html += '<h1>' + esc(s.name) + '</h1>' +
-      '<p class="sub">' + fmtDate(s.createdAt) + ' 시작 · ' +
+      '<p class="sub">' + rangeText(s) + ' · ' + fmtDate(s.createdAt) + ' 시작 · ' +
       (s.finishedAt ? fmtDate(s.finishedAt) + ' 종료' : '진행 중') + '</p>';
 
     html += '<div class="stats">' +
       stat('총 풀이 시간', fmt(total)) +
       stat('문제당 평균', fmt(avg)) +
       stat('푼 문제', touched + ' / ' + s.count) +
-      stat('가장 오래 걸린 문제', maxI >= 0 ? (maxI + 1) + '번 · ' + fmt(values[maxI]) : '–') +
-      stat('가장 빨리 푼 문제', minI >= 0 ? (minI + 1) + '번 · ' + fmt(values[minI]) : '–') +
+      stat('가장 오래 걸린 문제', maxI >= 0 ? qno(s, maxI) + '번 · ' + fmt(values[maxI]) : '–') +
+      stat('가장 빨리 푼 문제', minI >= 0 ? qno(s, minI) + '번 · ' + fmt(values[minI]) : '–') +
       '</div>';
 
     html += '<h2>문제별 풀이 시간</h2>' +
@@ -433,7 +451,7 @@
         return '<span class="try ' + a.result + '">' + (k + 1) + '차 ' + fmt(a.ms) + '</span>';
       }).join('');
       html += '<tr>' +
-        '<td>' + (j + 1) + '번</td>' +
+        '<td>' + qno(s, j) + '번</td>' +
         '<td><div class="tries">' + (tries || '<span class="muted">–</span>') + '</div></td>' +
         '<td class="num">' + p.attempts.length + '</td>' +
         '<td class="num">' + (values[j] ? fmt(values[j]) : '–') + '</td>' +
@@ -479,7 +497,7 @@
       if (act) {
         html += '<h2>진행 중</h2><div class="setlist"><div class="setrow">' +
           '<div class="grow"><div class="name">' + esc(act.name) + '</div>' +
-          '<div class="meta">' + fmtDate(act.createdAt) + ' 시작 · ' + act.count + '문제</div></div>' +
+          '<div class="meta">' + fmtDate(act.createdAt) + ' 시작 · ' + rangeText(act) + '</div></div>' +
           '<div class="val">' + fmt(totalMs(act)) + '</div>' +
           '<button class="linkish" data-action="resume">이어서</button></div></div>';
       }
@@ -534,6 +552,7 @@
     app.innerHTML = html;
     window.scrollTo(0, keepScroll ? y : 0);
     lastRendered = view.name;
+    updateRangeHint();
     setTicker();
   }
 
@@ -557,6 +576,32 @@
     if (cell) cell.textContent = fmt(problemMs(s, s.currentIndex));
 
     if (Date.now() - (s.lastTick || 0) > 2000) { s.lastTick = Date.now(); save(); }
+  }
+
+  function clampInt(value, min, max, fallback) {
+    var n = parseInt(value, 10);
+    if (isNaN(n)) n = fallback;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  function readCount() {
+    var el = document.getElementById('set-count');
+    return clampInt(el && el.value, 1, 200, 20);
+  }
+
+  function readStart() {
+    var el = document.getElementById('set-start');
+    return clampInt(el && el.value, 1, 999, 1);
+  }
+
+  function updateRangeHint() {
+    var hint = document.getElementById('range-hint');
+    if (!hint) return;
+    var start = readStart(), count = readCount();
+    var end = start + count - 1;
+    hint.textContent = count > 1
+      ? start + '~' + end + '번, 모두 ' + count + '문제로 기록됩니다.'
+      : start + '번 한 문제만 기록됩니다.';
   }
 
   function go(name, setId) {
@@ -597,6 +642,7 @@
     if (preset) {
       var input = document.getElementById('set-count');
       if (input) input.value = preset;
+      updateRangeHint();
       return;
     }
 
@@ -649,11 +695,12 @@
       finishSet(activeSet());
     }
     var name = (document.getElementById('set-name').value || '').trim() || defaultName();
-    var count = parseInt(document.getElementById('set-count').value, 10);
-    if (!count || count < 1) count = 1;
-    if (count > 200) count = 200;
-    createSet(name, count);
+    createSet(name, readCount(), readStart());
     go('run');
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target && (e.target.id === 'set-start' || e.target.id === 'set-count')) updateRangeHint();
   });
 
   document.addEventListener('keydown', function (e) {
