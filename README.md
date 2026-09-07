@@ -41,13 +41,12 @@ npx http-server -p 8123 .
 
 ## GitHub Pages 배포
 
-`main` 브랜치에 푸시하면 `.github/workflows/deploy.yml` 이 저장소 루트를 그대로 Pages 에 올립니다.
-워크플로의 `configure-pages` 단계가 `enablement: true` 라서 Pages 가 꺼져 있으면 **스스로 켭니다**.
-별도 설정 없이 푸시만 하면 `https://<사용자>.github.io/ncs-timer/` 에 배포됩니다.
+**Settings → Pages → Source: Deploy from a branch (`main` / `/ (root)`)** 로 설정되어 있습니다.
+빌드 과정이 없으므로 `main` 에 푸시하면 잠시 뒤 그대로 반영됩니다.
 
-- 저장소 설정에서 Actions 권한이 막혀 있으면 워크플로가 실패합니다.
-  그때는 **Settings → Pages → Source** 를 *GitHub Actions* 로 한 번만 지정해 주세요.
-- 저장 키가 도메인 단위이므로, 같은 주소로 계속 접속하면 기록이 유지됩니다.
+- 주소: `https://<사용자>.github.io/ncs-timer/`
+- 루트의 `.nojekyll` 이 Jekyll 처리를 끄고 파일을 그대로 내보냅니다.
+- 기록은 도메인 단위로 저장되므로, 같은 주소로 접속하는 한 그대로 유지됩니다.
 
 ## 파일
 
