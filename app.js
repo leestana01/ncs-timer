@@ -369,6 +369,8 @@
       '</div>' +
       '<div class="val">' + fmt(t) + '<small>문제당 ' + fmt(solved ? t / solved : 0) + '</small></div>' +
       '<button class="linkish" data-action="open-report" data-id="' + s.id + '">리포트</button>' +
+      '<button class="linkish del" data-action="delete-set" data-id="' + s.id +
+      '" title="이 세트 기록 삭제" aria-label="' + esc(s.name) + ' 기록 삭제">삭제</button>' +
       '</div>';
   }
 
@@ -775,12 +777,16 @@
         go('report', el.getAttribute('data-id'));
         break;
       case 'delete-set':
-        if (confirm('이 세트의 기록을 삭제할까요? 되돌릴 수 없습니다.')) {
-          var id = el.getAttribute('data-id');
-          db.sets = db.sets.filter(function (x) { return x.id !== id; });
-          save();
-          go('sets');
-        }
+        var id = el.getAttribute('data-id');
+        var target = getSet(id);
+        if (!target) break;
+        if (!confirm('‘' + target.name + '’ 기록을 삭제할까요?\n' + rangeText(target) + ' · 총 ' +
+          fmt(totalMs(target)) + '. 되돌릴 수 없습니다.')) break;
+        db.sets = db.sets.filter(function (x) { return x.id !== id; });
+        save();
+        // 지금 보고 있던 리포트를 지웠으면 목록으로, 목록에서 지웠으면 제자리에서 갱신
+        if (view.name === 'report' && view.setId === id) go('sets');
+        else render();
         break;
       case 'export':
         exportJson();
