@@ -157,6 +157,7 @@
   function enter(s, index) {
     s.currentIndex = index;
     s.attemptMs = 0;
+    s.paused = false; // 다음 문제로 넘어가면 일시정지는 풀린다
     s.segmentStart = Date.now();
     s.lastTick = Date.now();
   }
@@ -389,20 +390,31 @@
     html += '<div class="stage">';
     if (open) {
       var prev = attemptsSum(s.problems[idx]);
+      var paused = !!s.paused;
       html += '<div class="qlabel">지금 푸는 문제</div>' +
         '<div class="qnum">' + qno(s, idx) + '번</div>' +
-        '<div class="bigtime" id="big-time">' + fmt(liveMs(s)) + '</div>' +
+        '<div class="bigtime' + (paused ? ' dim' : '') + '" id="big-time">' + fmt(liveMs(s)) + '</div>' +
         '<div class="metaline">' +
         (prev > 0 ? '이 문제 누적 <b id="q-total">' + fmt(prev + liveMs(s)) + '</b> · ' : '') +
         '세트 총 <b id="set-total">' + fmt(totalMs(s)) + '</b></div>';
-      html += '<div class="actions">' +
-        '<button class="btn" data-action="pass">패스</button>' +
-        '<button class="btn primary" data-action="next">' +
-        (s.phase === 'run' ? '다음 문제' : '풀이 완료') + '</button>' +
-        '</div>' +
-        '<div class="row" style="justify-content:center;margin-top:10px">' +
-        '<button class="btn ghost" data-action="finish">세트 종료</button></div>' +
-        '<div class="hint">스페이스 · → : 다음 &nbsp;|&nbsp; P · ↓ : 패스</div>';
+      if (paused) {
+        html += '<div class="paused-note">일시정지됨 · 시간이 흐르지 않습니다</div>' +
+          '<div class="actions">' +
+          '<button class="btn primary" data-action="resume-clock">계속하기</button></div>' +
+          '<div class="row" style="justify-content:center;margin-top:10px">' +
+          '<button class="btn ghost" data-action="finish">세트 종료</button></div>' +
+          '<div class="hint">스페이스 · Esc : 계속하기</div>';
+      } else {
+        html += '<div class="actions">' +
+          '<button class="btn" data-action="pass">패스</button>' +
+          '<button class="btn primary" data-action="next">' +
+          (s.phase === 'run' ? '다음 문제' : '풀이 완료') + '</button>' +
+          '</div>' +
+          '<div class="row" style="justify-content:center;margin-top:10px">' +
+          '<button class="btn ghost" data-action="pause-clock">일시정지</button>' +
+          '<button class="btn ghost" data-action="finish">세트 종료</button></div>' +
+          '<div class="hint">스페이스 · → : 다음 &nbsp;|&nbsp; P · ↓ : 패스 &nbsp;|&nbsp; Esc : 일시정지</div>';
+      }
     } else {
       html += '<div class="qlabel">모든 문제를 한 번씩 지나갔습니다</div>' +
         '<div class="bigtime" id="big-time">' + fmt(totalMs(s)) + '</div>' +
@@ -601,7 +613,8 @@
   function syncClock() {
     var s = activeSet();
     if (!s) return;
-    var changed = view.name === 'run' ? resumeClock(s) : pauseClock(s);
+    var shouldRun = view.name === 'run' && !s.paused;
+    var changed = shouldRun ? resumeClock(s) : pauseClock(s);
     if (changed) save();
   }
 
@@ -697,6 +710,14 @@
     if (s && s.currentIndex !== null) { advance(s, 'passed'); render(); }
   }
 
+  function setPaused(flag) {
+    var s = activeSet();
+    if (!s || s.currentIndex === null) return;
+    s.paused = flag;
+    save();
+    render(); // syncClock 이 시계를 멈추거나 다시 돌린다
+  }
+
   function doFinish() {
     var s = activeSet();
     if (!s) return;
@@ -729,6 +750,8 @@
     var s;
     switch (action) {
       case 'resume':
+        s = activeSet();
+        if (s && s.paused) { s.paused = false; save(); } // '이어서 풀기'는 곧 재개
         go('run');
         break;
       case 'discard':
@@ -741,6 +764,8 @@
         break;
       case 'next': doNext(); break;
       case 'pass': doPass(); break;
+      case 'pause-clock': setPaused(true); break;
+      case 'resume-clock': setPaused(false); break;
       case 'finish': doFinish(); break;
       case 'goto':
         s = activeSet();
@@ -784,7 +809,20 @@
     var t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+    var s = activeSet();
+    if (!s || s.currentIndex === null) return;
+
+    if (s.paused) { // 멈춰 있을 때는 어떤 진행 키를 눌러도 '계속하기'
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault();
+        setPaused(false);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setPaused(true);
+    } else if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
       e.preventDefault();
       doNext();
     } else if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ' || e.key === 'ArrowDown') {

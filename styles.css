@@ -219,6 +219,18 @@ input:focus-visible, .btn:focus-visible, .chip:focus-visible, button:focus-visib
   margin: 6px 0 2px;
 }
 
+.bigtime.dim { opacity: .38; }
+
+.paused-note {
+  margin-top: 16px;
+  display: inline-block;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
 .metaline { color: var(--muted); font-size: 14px; }
 .metaline b { font-weight: 600; color: var(--text); font-family: var(--mono); }
 
