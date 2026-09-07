@@ -7,6 +7,10 @@
   var KEY = 'ncs-timer.v1';
   var AWAY_LIMIT = 30000; // 탭을 닫아둔 시간이 이보다 길면 기록에서 제외한다
 
+  // NCS 필기에서 흔히 쓰이는 문항 수. 50문항이 가장 일반적이라 기본값으로 둔다.
+  var COUNT_PRESETS = [20, 40, 50, 60, 80, 100];
+  var DEFAULT_COUNT = 50;
+
   var db = { sets: [] };
   var view = { name: 'home', setId: null };
   var lastRendered = null;
@@ -184,6 +188,14 @@
       '. ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
 
+  // 직전에 쓴 문항 수를 그대로 다시 제안한다 (기록이 없으면 50문항)
+  function defaultCount() {
+    for (var i = db.sets.length - 1; i >= 0; i--) {
+      if (db.sets[i].count) return db.sets[i].count;
+    }
+    return DEFAULT_COUNT;
+  }
+
   function defaultName() {
     var d = new Date();
     return 'NCS ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 세트';
@@ -298,15 +310,16 @@
       '<div class="two">' +
       '<label class="field"><span>시작 번호</span>' +
       '<input type="number" id="set-start" value="1" min="1" max="999" inputmode="numeric" /></label>' +
-      '<label class="field"><span>문제 수</span>' +
-      '<input type="number" id="set-count" value="20" min="1" max="200" inputmode="numeric" /></label>' +
+      '<label class="field"><span>문항 수</span>' +
+      '<input type="number" id="set-count" value="' + defaultCount() +
+      '" min="1" max="200" inputmode="numeric" /></label>' +
       '</div>' +
       '<div class="presets">' +
-      [10, 15, 20, 25, 40, 50, 60].map(function (n) {
-        return '<button type="button" data-preset="' + n + '">' + n + '문제</button>';
+      COUNT_PRESETS.map(function (n) {
+        return '<button type="button" data-preset="' + n + '">' + n + '문항</button>';
       }).join('') +
       '</div>' +
-      '<div class="hint" id="range-hint" style="margin-top:10px">1~20번으로 기록됩니다.</div>' +
+      '<div class="hint" id="range-hint" style="margin-top:10px"></div>' +
       '<div style="margin-top:20px"><button class="btn primary lg wide" type="submit">시작하기</button></div>' +
       '</form></div>';
 
@@ -329,7 +342,7 @@
       '<div class="grow">' +
       '<div class="name">' + esc(s.name) + '</div>' +
       '<div class="meta">' + fmtDate(s.finishedAt || s.createdAt) + ' · ' + rangeText(s) +
-      ' (' + s.count + '문제)</div>' +
+      ' (' + s.count + '문항)</div>' +
       '</div>' +
       '<div class="val">' + fmt(t) + '<small>문제당 ' + fmt(solved ? t / solved : 0) + '</small></div>' +
       '<button class="linkish" data-action="open-report" data-id="' + s.id + '">리포트</button>' +
@@ -586,7 +599,7 @@
 
   function readCount() {
     var el = document.getElementById('set-count');
-    return clampInt(el && el.value, 1, 200, 20);
+    return clampInt(el && el.value, 1, 200, DEFAULT_COUNT);
   }
 
   function readStart() {
@@ -600,8 +613,14 @@
     var start = readStart(), count = readCount();
     var end = start + count - 1;
     hint.textContent = count > 1
-      ? start + '~' + end + '번, 모두 ' + count + '문제로 기록됩니다.'
-      : start + '번 한 문제만 기록됩니다.';
+      ? start + '~' + end + '번, 모두 ' + count + '문항으로 기록됩니다.'
+      : start + '번 한 문항만 기록됩니다.';
+
+    var buttons = document.querySelectorAll('.presets [data-preset]');
+    for (var i = 0; i < buttons.length; i++) {
+      var on = parseInt(buttons[i].getAttribute('data-preset'), 10) === count;
+      buttons[i].className = on ? 'on' : '';
+    }
   }
 
   function go(name, setId) {

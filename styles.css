@@ -182,6 +182,7 @@ input:focus-visible, .btn:focus-visible, .chip:focus-visible, button:focus-visib
   color: var(--muted);
 }
 .presets button:hover { color: var(--text); border-color: var(--accent); }
+.presets button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 .empty {
   border: 1px dashed var(--line);
