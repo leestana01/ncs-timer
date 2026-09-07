@@ -94,12 +94,30 @@
     return s.count > 1 ? qno(s, 0) + '~' + qno(s, s.count - 1) + '번' : qno(s, 0) + '번';
   }
 
+  // 시계가 실제로 돌고 있는 상태 (풀이 화면을 벗어나면 멈춘다)
   function running(s) {
-    return s.status === 'active' && s.currentIndex !== null && s.segmentStart;
+    return s.status === 'active' && s.currentIndex !== null && !!s.segmentStart;
   }
 
+  // 현재 문제에 지금까지 쓴 시간 (멈춰 있어도 그때까지 쌓인 시간은 남는다)
   function liveMs(s) {
-    return running(s) ? Date.now() - s.segmentStart : 0;
+    if (s.currentIndex === null) return 0;
+    return (s.attemptMs || 0) + (s.segmentStart ? Date.now() - s.segmentStart : 0);
+  }
+
+  function pauseClock(s) {
+    if (!s || s.status !== 'active' || !s.segmentStart) return false;
+    s.attemptMs = (s.attemptMs || 0) + (Date.now() - s.segmentStart);
+    s.segmentStart = null;
+    s.lastTick = Date.now();
+    return true;
+  }
+
+  function resumeClock(s) {
+    if (!s || s.status !== 'active' || s.currentIndex === null || s.segmentStart) return false;
+    s.segmentStart = Date.now();
+    s.lastTick = Date.now();
+    return true;
   }
 
   function attemptsSum(p) {
@@ -128,14 +146,17 @@
   }
 
   function closeAttempt(s, result) {
-    if (s.currentIndex === null || !s.segmentStart) return;
-    var ms = Date.now() - s.segmentStart;
-    s.problems[s.currentIndex].attempts.push({ ms: ms, result: result, at: Date.now() });
+    if (s.currentIndex === null) return;
+    var ms = liveMs(s);
+    s.attemptMs = 0;
     s.segmentStart = null;
+    if (ms <= 0) return; // 시간이 쌓이지 않았으면 시도로 남기지 않는다
+    s.problems[s.currentIndex].attempts.push({ ms: ms, result: result, at: Date.now() });
   }
 
   function enter(s, index) {
     s.currentIndex = index;
+    s.attemptMs = 0;
     s.segmentStart = Date.now();
     s.lastTick = Date.now();
   }
@@ -290,12 +311,13 @@
       var doneCount = 0;
       for (var i = 0; i < s.count; i++) if (problemState(s, i) === 'solved') doneCount++;
       html += '<div class="resume">' +
-        '<div class="grow"><div style="font-weight:600">진행 중인 세트가 있습니다</div>' +
+        '<div class="grow"><div style="font-weight:600">진행 중인 세트가 있습니다 · 시간 멈춤</div>' +
         '<div class="muted" style="font-size:14px">' + esc(s.name) + ' · ' + rangeText(s) + ' · ' +
         doneCount + '/' + s.count + ' 문제 완료 · 누적 <span class="mono">' + fmt(totalMs(s)) +
         '</span></div></div>' +
         '<button class="btn primary" data-action="resume">이어서 풀기</button>' +
         '<button class="btn ghost" data-action="discard">삭제</button>' +
+        '<div class="hint" style="flex-basis:100%;margin:0">홈·기록 화면에 있는 동안에는 시간이 흐르지 않습니다.</div>' +
         '</div>';
     }
 
@@ -551,9 +573,42 @@
     return html;
   }
 
+  /* ------------------------------------------------------------ 라우팅 */
+
+  function hashFor(v) {
+    if (v.name === 'run') return '#/run';
+    if (v.name === 'sets') return '#/sets';
+    if (v.name === 'report') return '#/report/' + encodeURIComponent(v.setId || '');
+    return '#/';
+  }
+
+  function parseHash() {
+    var h = location.hash.replace(/^#\/?/, '');
+    if (h.indexOf('report/') === 0) return { name: 'report', setId: decodeURIComponent(h.slice(7)) };
+    if (h === 'run') return { name: 'run', setId: null };
+    if (h === 'sets') return { name: 'sets', setId: null };
+    return { name: 'home', setId: null };
+  }
+
+  // 존재하지 않는 화면(끝난 세트의 풀이 화면, 지워진 리포트)은 대체 화면으로 보낸다
+  function normalize(v) {
+    if (v.name === 'run' && !activeSet()) return { name: 'home', setId: null };
+    if (v.name === 'report' && !getSet(v.setId)) return { name: 'sets', setId: null };
+    return v;
+  }
+
+  // 풀이 화면에 있을 때만 시계가 돈다. 홈·기록·리포트로 나가면 멈춘다.
+  function syncClock() {
+    var s = activeSet();
+    if (!s) return;
+    var changed = view.name === 'run' ? resumeClock(s) : pauseClock(s);
+    if (changed) save();
+  }
+
   /* -------------------------------------------------------------- 렌더링 */
 
   function render() {
+    syncClock();
     var app = document.getElementById('app');
     var html;
     if (view.name === 'run') html = renderRun();
@@ -624,7 +679,9 @@
   }
 
   function go(name, setId) {
-    view = { name: name, setId: setId || null };
+    view = normalize({ name: name, setId: setId || null });
+    var h = hashFor(view);
+    if (location.hash !== h) history.pushState(null, '', h);
     render();
   }
 
@@ -736,9 +793,27 @@
     }
   });
 
+  // 브라우저 뒤로/앞으로
+  window.addEventListener('popstate', function () {
+    view = normalize(parseHash());
+    var h = hashFor(view);
+    if (location.hash !== h) history.replaceState(null, '', h); // 대체된 화면에 맞게 주소도 정리
+    render();
+  });
+
   document.addEventListener('visibilitychange', function () {
     var s = activeSet();
     if (s) { s.lastTick = Date.now(); save(); }
+  });
+
+  // 탭을 닫거나 다른 사이트로 이동할 때는 시계를 멈춰 둔다
+  window.addEventListener('pagehide', function () {
+    if (pauseClock(activeSet())) save();
+  });
+
+  // 뒤로가기 캐시에서 되살아난 경우 풀이 화면이면 다시 이어서 잰다
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) render();
   });
 
   function exportJson() {
@@ -756,7 +831,10 @@
   /* ---------------------------------------------------------------- 시작 */
 
   load();
-  var pending = activeSet();
-  view.name = pending ? 'run' : 'home';
+  var noRoute = !location.hash || location.hash === '#';
+  view = normalize(noRoute
+    ? { name: activeSet() ? 'run' : 'home', setId: null }
+    : parseHash());
+  history.replaceState(null, '', hashFor(view));
   render();
 })();
